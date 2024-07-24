@@ -786,6 +786,8 @@ configure(project(':statsnode')) {
     }
 }
 
+apply plugin: 'com.github.johnrengelman.shadow'
+
 configure(project(':daemon')) {
     mainClassName = 'haveno.daemon.app.HavenoDaemonMain'
 
@@ -845,27 +847,12 @@ configure(project(':daemon')) {
         implementation "org.openjfx:javafx-base:$javafxVersion:$os"
         implementation "org.openjfx:javafx-graphics:$javafxVersion:$os"
     }
-}
 
-configure(project(':inventory')) {
-    apply plugin: 'com.github.johnrengelman.shadow'
-
-    mainClassName = 'haveno.inventory.InventoryMonitorMain'
-
-    dependencies {
-        implementation project(':common')
-        implementation project(':p2p')
-        implementation project(':core')
-        annotationProcessor "org.projectlombok:lombok:$lombokVersion"
-        compileOnly "org.projectlombok:lombok:$lombokVersion"
-        implementation "ch.qos.logback:logback-classic:$logbackVersion"
-        implementation "ch.qos.logback:logback-core:$logbackVersion"
-        implementation "com.google.guava:guava:$guavaVersion"
-        implementation "com.sparkjava:spark-core:$sparkVersion"
-        implementation "org.jetbrains:annotations:$jetbrainsAnnotationsVersion"
-        implementation("com.google.inject:guice:$guiceVersion") {
-            exclude(module: 'guava')
-        }
+    shadowJar {
+        archiveBaseName.set('daemon-all')
+        archiveClassifier.set('')
+        archiveVersion.set('')
+        mergeServiceFiles()
     }
 }
 
