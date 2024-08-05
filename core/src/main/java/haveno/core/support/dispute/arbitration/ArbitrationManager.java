@@ -87,9 +87,11 @@ import monero.wallet.model.MoneroTxWallet;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -168,7 +170,28 @@ public final class ArbitrationManager extends DisputeManager<ArbitrationDisputeL
 
     @Override
     public void cleanupDisputes() {
-        // no action
+
+        // remove disputes opened by arbitrator, which is not allowed
+        Set<Dispute> toRemoves = new HashSet<>();
+        List<Dispute> disputes = getDisputeList().getList();
+        for (Dispute dispute : disputes) {
+
+            // get dispute's trade
+            final Trade trade = tradeManager.getTrade(dispute.getTradeId());
+            if (trade == null) {
+                log.warn("Dispute trade {} does not exist", dispute.getTradeId());
+                return;
+            }
+
+            // collect dispute if owned by arbitrator
+            if (dispute.getTraderPubKeyRing().equals(trade.getArbitrator().getPubKeyRing())) {
+                toRemoves.add(dispute);
+            }
+        }
+        for (Dispute toRemove : toRemoves) {
+            log.warn("Removing invalid dispute opened by arbitrator, disputeId={}", toRemove.getTradeId(), toRemove.getId());
+            getDisputeList().remove(toRemove);
+        }
     }
 
     @Override
@@ -252,7 +275,7 @@ public final class ArbitrationManager extends DisputeManager<ArbitrationDisputeL
 
                     // save dispute closed message for reprocessing
                     trade.getArbitrator().setDisputeClosedMessage(disputeClosedMessage);
-                    requestPersistence();
+                    requestPersistence(trade);
 
                     // verify arbitrator does not receive DisputeClosedMessage
                     if (keyRing.getPubKeyRing().equals(dispute.getAgentPubKeyRing())) {
@@ -308,7 +331,7 @@ public final class ArbitrationManager extends DisputeManager<ArbitrationDisputeL
                                 if (trade.isPayoutPublished()) {
                                     log.info("Dispute payout tx already published for {} {}", trade.getClass().getSimpleName(), trade.getId());
                                 } else {
-                                    if (e instanceof IllegalArgumentException) throw e;
+                                    if (e instanceof IllegalArgumentException || e instanceof IllegalStateException) throw e;
                                     else throw new RuntimeException("Failed to sign and publish dispute payout tx from arbitrator for " + trade.getClass().getSimpleName() + " " + tradeId + ": " + e.getMessage(), e);
                                 }
                             }
@@ -326,17 +349,21 @@ public final class ArbitrationManager extends DisputeManager<ArbitrationDisputeL
                     // We use the chatMessage as we only persist those not the DisputeClosedMessage.
                     // If we would use the DisputeClosedMessage we could not lookup for the msg when we receive the AckMessage.
                     sendAckMessage(chatMessage, dispute.getAgentPubKeyRing(), true, null);
-                    requestPersistence();
+                    requestPersistence(trade);
                 } catch (Exception e) {
-                    log.warn("Error processing dispute closed message: " + e.getMessage());
+                    log.warn("Error processing dispute closed message: {}", e.getMessage());
                     e.printStackTrace();
-                    requestPersistence();
+                    requestPersistence(trade);
 
                     // nack bad message and do not reprocess
-                    if (e instanceof IllegalArgumentException) {
+                    if (e instanceof IllegalArgumentException || e instanceof IllegalStateException) {
                         trade.getArbitrator().setDisputeClosedMessage(null); // message is processed
+                        trade.setDisputeState(Trade.DisputeState.DISPUTE_CLOSED);
+                        String warningMsg = "Error processing dispute closed message: " +  e.getMessage() + "\n\nOpen another dispute to try again (ctrl+o).";
+                        trade.prependErrorMessage(warningMsg);
                         sendAckMessage(chatMessage, dispute.getAgentPubKeyRing(), false, e.getMessage());
-                        requestPersistence();
+                        HavenoUtils.havenoSetup.getTopErrorMsg().set(warningMsg);
+                        requestPersistence(trade);
                         throw e;
                     }
 
@@ -442,12 +469,16 @@ public final class ArbitrationManager extends DisputeManager<ArbitrationDisputeL
 
         // sign arbitrator-signed payout tx
         if (trade.getPayoutTxHex() == null) {
-            MoneroMultisigSignResult result = multisigWallet.signMultisigTxHex(unsignedPayoutTxHex);
-            if (result.getSignedMultisigTxHex() == null) throw new RuntimeException("Error signing arbitrator-signed payout tx");
-            String signedMultisigTxHex = result.getSignedMultisigTxHex();
-            disputeTxSet.setMultisigTxHex(signedMultisigTxHex);
-            trade.setPayoutTxHex(signedMultisigTxHex);
-            requestPersistence();
+            try {
+                MoneroMultisigSignResult result = multisigWallet.signMultisigTxHex(unsignedPayoutTxHex);
+                if (result.getSignedMultisigTxHex() == null) throw new RuntimeException("Error signing arbitrator-signed payout tx");
+                String signedMultisigTxHex = result.getSignedMultisigTxHex();
+                disputeTxSet.setMultisigTxHex(signedMultisigTxHex);
+                trade.setPayoutTxHex(signedMultisigTxHex);
+                requestPersistence(trade);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
 
             // verify mining fee is within tolerance by recreating payout tx
             // TODO (monero-project): creating tx will require exchanging updated multisig hex if message needs reprocessed. provide weight with describe_transfer so fee can be estimated?
@@ -487,6 +518,7 @@ public final class ArbitrationManager extends DisputeManager<ArbitrationDisputeL
         trade.updatePayout(disputeTxSet.getTxs().get(0));
         trade.setPayoutState(Trade.PayoutState.PAYOUT_PUBLISHED);
         dispute.setDisputePayoutTxId(disputeTxSet.getTxs().get(0).getHash());
+        requestPersistence(trade);
         return disputeTxSet;
     }
 
