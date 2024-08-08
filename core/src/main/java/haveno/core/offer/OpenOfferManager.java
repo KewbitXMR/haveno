@@ -110,6 +110,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javax.annotation.Nullable;
 import lombok.Getter;
+import monero.common.MoneroRpcConnection;
 import monero.daemon.model.MoneroKeyImageSpentStatus;
 import monero.daemon.model.MoneroTx;
 import monero.wallet.model.MoneroIncomingTransfer;
@@ -1084,11 +1085,12 @@ public class OpenOfferManager implements PeerManager.Listener, DecryptedDirectMe
         BigInteger reserveAmount = openOffer.getOffer().getAmountNeeded();
         xmrWalletService.swapAddressEntryToAvailable(openOffer.getId(), XmrAddressEntry.Context.OFFER_FUNDING); // change funding subaddress in case funded with unsuitable output(s)
         MoneroTxWallet splitOutputTx = null;
-        synchronized (XmrWalletService.WALLET_LOCK) {
+        synchronized (HavenoUtils.xmrWalletService.getWalletLock()) {
             XmrAddressEntry entry = xmrWalletService.getOrCreateAddressEntry(openOffer.getId(), XmrAddressEntry.Context.OFFER_FUNDING);
             synchronized (HavenoUtils.getWalletFunctionLock()) {
                 long startTime = System.currentTimeMillis();
                 for (int i = 0; i < TradeProtocol.MAX_ATTEMPTS; i++) {
+                    MoneroRpcConnection sourceConnection = xmrConnectionService.getConnection();
                     try {
                         log.info("Creating split output tx to fund offer {} at subaddress {}", openOffer.getShortId(), entry.getSubaddressIndex());
                         splitOutputTx = xmrWalletService.createTx(new MoneroTxConfig()
@@ -1101,8 +1103,8 @@ public class OpenOfferManager implements PeerManager.Listener, DecryptedDirectMe
                     } catch (Exception e) {
                         if (e.getMessage().contains("not enough")) throw e; // do not retry if not enough funds
                         log.warn("Error creating split output tx to fund offer, offerId={}, subaddress={}, attempt={}/{}, error={}", openOffer.getShortId(), entry.getSubaddressIndex(), i + 1, TradeProtocol.MAX_ATTEMPTS, e.getMessage());
+                        xmrWalletService.handleWalletError(e, sourceConnection);
                         if (stopped || i == TradeProtocol.MAX_ATTEMPTS - 1) throw e;
-                        if (xmrConnectionService.isConnected()) xmrWalletService.requestSwitchToNextBestConnection();
                         HavenoUtils.waitFor(TradeProtocol.REPROCESS_DELAY_MS); // wait before retrying
                     }
                 }
@@ -1754,7 +1756,7 @@ public class OpenOfferManager implements PeerManager.Listener, DecryptedDirectMe
                 log.warn("Offer {} has invalid arbitrator signature, reposting", openOffer.getId());
                 isValid = false;
             }
-            if (openOffer.getOffer().getOfferPayload().getReserveTxKeyImages() != null && (openOffer.getReserveTxHash() == null || openOffer.getReserveTxHash().isEmpty())) {
+            if ((openOffer.getOffer().getOfferPayload().getReserveTxKeyImages() != null || openOffer.getOffer().getOfferPayload().getReserveTxKeyImages().isEmpty()) && (openOffer.getReserveTxHash() == null || openOffer.getReserveTxHash().isEmpty())) {
                 log.warn("Offer {} is missing reserve tx hash but has reserved key images, reposting", openOffer.getId());
                 isValid = false;
             }

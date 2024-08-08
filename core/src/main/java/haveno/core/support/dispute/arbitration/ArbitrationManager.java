@@ -78,6 +78,7 @@ import haveno.network.p2p.P2PService;
 import haveno.network.p2p.network.Connection;
 import haveno.network.p2p.network.MessageListener;
 import lombok.extern.slf4j.Slf4j;
+import monero.common.MoneroRpcConnection;
 import monero.wallet.MoneroWallet;
 import monero.wallet.model.MoneroDestination;
 import monero.wallet.model.MoneroMultisigSignResult;
@@ -239,7 +240,7 @@ public final class ArbitrationManager extends DisputeManager<ArbitrationDisputeL
         ThreadUtils.execute(() -> {
             ChatMessage chatMessage = null;
             Dispute dispute = null;
-            synchronized (trade) {
+            synchronized (trade.getLock()) {
                 try {
                     DisputeResult disputeResult = disputeClosedMessage.getDisputeResult();
                     chatMessage = disputeResult.getChatMessage();
@@ -286,10 +287,12 @@ public final class ArbitrationManager extends DisputeManager<ArbitrationDisputeL
 
                     // set dispute state
                     cleanupRetryMap(uid);
-                    if (!dispute.getChatMessages().contains(chatMessage)) {
-                        dispute.addAndPersistChatMessage(chatMessage);
-                    } else {
-                        log.warn("We got a dispute mail msg that we have already stored. TradeId = " + chatMessage.getTradeId());
+                    synchronized (dispute.getChatMessages()) {
+                        if (!dispute.getChatMessages().contains(chatMessage)) {
+                            dispute.addAndPersistChatMessage(chatMessage);
+                        } else {
+                            log.warn("We got a dispute mail msg that we have already stored. TradeId = " + chatMessage.getTradeId());
+                        }
                     }
                     dispute.setIsClosed();
                     if (dispute.disputeResultProperty().get() != null) {
@@ -383,7 +386,7 @@ public final class ArbitrationManager extends DisputeManager<ArbitrationDisputeL
     public void maybeReprocessDisputeClosedMessage(Trade trade, boolean reprocessOnError) {
         if (trade.isShutDownStarted()) return;
         ThreadUtils.execute(() -> {
-            synchronized (trade) {
+            synchronized (trade.getLock()) {
 
                 // skip if no need to reprocess
                 if (trade.isArbitrator() || trade.getArbitrator().getDisputeClosedMessage() == null || trade.getArbitrator().getDisputeClosedMessage().getUnsignedPayoutTxHex() == null || trade.getDisputeState().ordinal() >= Trade.DisputeState.DISPUTE_CLOSED.ordinal()) {
@@ -477,7 +480,7 @@ public final class ArbitrationManager extends DisputeManager<ArbitrationDisputeL
                 trade.setPayoutTxHex(signedMultisigTxHex);
                 requestPersistence(trade);
             } catch (Exception e) {
-                throw new IllegalStateException(e);
+                throw new IllegalStateException(e.getMessage());
             }
 
             // verify mining fee is within tolerance by recreating payout tx
@@ -501,6 +504,7 @@ public final class ArbitrationManager extends DisputeManager<ArbitrationDisputeL
 
         // submit fully signed payout tx to the network
         for (int i = 0; i < TradeProtocol.MAX_ATTEMPTS; i++) {
+            MoneroRpcConnection sourceConnection = xmrConnectionService.getConnection();
             try {
                 List<String> txHashes = multisigWallet.submitMultisigTxHex(disputeTxSet.getMultisigTxHex());
                 disputeTxSet.getTxs().get(0).setHash(txHashes.get(0)); // manually update hash which is known after signed
@@ -509,7 +513,7 @@ public final class ArbitrationManager extends DisputeManager<ArbitrationDisputeL
                 if (trade.isPayoutPublished()) throw new IllegalStateException("Payout tx already published for " + trade.getClass().getSimpleName() + " " + trade.getShortId());
                 log.warn("Failed to submit dispute payout tx, tradeId={}, attempt={}/{}, error={}", trade.getShortId(), i + 1, TradeProtocol.MAX_ATTEMPTS, e.getMessage());
                 if (i == TradeProtocol.MAX_ATTEMPTS - 1) throw e;
-                if (trade.getXmrConnectionService().isConnected()) trade.requestSwitchToNextBestConnection();
+                if (trade.getXmrConnectionService().isConnected()) trade.requestSwitchToNextBestConnection(sourceConnection);
                 HavenoUtils.waitFor(TradeProtocol.REPROCESS_DELAY_MS); // wait before retrying
             }
         }
