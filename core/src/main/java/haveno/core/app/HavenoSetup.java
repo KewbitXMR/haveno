@@ -358,23 +358,23 @@ public class HavenoSetup {
 
             // install monerod
             File monerodFile = new File(XmrLocalNode.MONEROD_PATH);
-            String monerodResourcePath = "bin/" + XmrLocalNode.MONEROD_NAME;
-            if (!monerodFile.exists() || !FileUtil.resourceEqualToFile(monerodResourcePath, monerodFile)) {
-                log.info("Installing monerod");
-                monerodFile.getParentFile().mkdirs();
-                FileUtil.resourceToFile("bin/" + XmrLocalNode.MONEROD_NAME, monerodFile);
-                monerodFile.setExecutable(true);
-            }
+            //String monerodResourcePath = "bin/" + XmrLocalNode.MONEROD_NAME;
+            //if (!monerodFile.exists() || !FileUtil.resourceEqualToFile(monerodResourcePath, monerodFile)) {
+            //    log.info("Installing monerod");
+            //    monerodFile.getParentFile().mkdirs();
+            //    FileUtil.resourceToFile("bin/" + XmrLocalNode.MONEROD_NAME, monerodFile);
+            //    monerodFile.setExecutable(true);
+            //}
 
             // install monero-wallet-rpc
             File moneroWalletRpcFile = new File(XmrWalletService.MONERO_WALLET_RPC_PATH);
-            String moneroWalletRpcResourcePath = "bin/" + XmrWalletService.MONERO_WALLET_RPC_NAME;
-            if (!moneroWalletRpcFile.exists() || !FileUtil.resourceEqualToFile(moneroWalletRpcResourcePath, moneroWalletRpcFile)) {
-                log.info("Installing monero-wallet-rpc");
-                moneroWalletRpcFile.getParentFile().mkdirs();
-                FileUtil.resourceToFile(moneroWalletRpcResourcePath, moneroWalletRpcFile);
-                moneroWalletRpcFile.setExecutable(true);
-            }
+            //String moneroWalletRpcResourcePath = "bin/" + XmrWalletService.MONERO_WALLET_RPC_NAME;
+            //if (!moneroWalletRpcFile.exists() || !FileUtil.resourceEqualToFile(moneroWalletRpcResourcePath, moneroWalletRpcFile)) {
+            //    log.info("Installing monero-wallet-rpc");
+            //    moneroWalletRpcFile.getParentFile().mkdirs();
+            //    FileUtil.resourceToFile(moneroWalletRpcResourcePath, moneroWalletRpcFile);
+            //    moneroWalletRpcFile.setExecutable(true);
+            //}
         } catch (Exception e) {
             e.printStackTrace();
             log.warn("Failed to install Monero binaries: " + e.toString());

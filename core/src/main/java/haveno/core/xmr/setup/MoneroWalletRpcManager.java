@@ -72,6 +72,7 @@ public class MoneroWalletRpcManager {
                     if (registeredPorts.containsKey(port)) throw new RuntimeException("Port " + port + " is already registered");
                     registeredPorts.put(port, null);
                 }
+                log.info("RUNNING RPC WALLET WITH COMMAND: {}", cmd);
                 MoneroWalletRpc walletRpc = new MoneroWalletRpc(cmd); // starts monero-wallet-rpc process
                 synchronized (registeredPorts) {
                     registeredPorts.put(port, walletRpc);
@@ -102,6 +103,7 @@ public class MoneroWalletRpcManager {
                         List<String> cmdCopy = new ArrayList<>(cmd); // preserve original cmd
                         cmdCopy.add(RPC_BIND_PORT_ARGUMENT);
                         cmdCopy.add("" + port);
+                        log.info("RUNNING RPC WALLET WITH COMMAND: {}", cmdCopy);
                         MoneroWalletRpc walletRpc = new MoneroWalletRpc(cmdCopy); // start monero-wallet-rpc process
                         synchronized (registeredPorts) {
                             registeredPorts.put(port, walletRpc);

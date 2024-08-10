@@ -118,7 +118,7 @@ public class XmrWalletService extends XmrWalletBase {
     private static final MoneroWalletRpcManager MONERO_WALLET_RPC_MANAGER = new MoneroWalletRpcManager();
     private static final String MONERO_WALLET_RPC_USERNAME = "haveno_user";
     private static final String MONERO_WALLET_RPC_DEFAULT_PASSWORD = "password"; // only used if account password is null
-    private static final String MONERO_WALLET_NAME = "haveno_XMR";
+    private static final String MONERO_WALLET_NAME = "haveno_plus_XMR";
     private static final String KEYS_FILE_POSTFIX = ".keys";
     private static final String ADDRESS_FILE_POSTFIX = ".address.txt";
     private static final int NUM_MAX_WALLET_BACKUPS = 1;
@@ -161,7 +161,7 @@ public class XmrWalletService extends XmrWalletBase {
     private List<MoneroOutputWallet> cachedOutputs;
     private List<MoneroTxWallet> cachedTxs;
 
-    @SuppressWarnings("unused")
+
     @Inject
     XmrWalletService(User user,
                      Preferences preferences,
