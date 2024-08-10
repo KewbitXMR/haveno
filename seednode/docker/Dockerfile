@@ -26,4 +26,4 @@ WORKDIR /home/haveno/haveno
 
 ENTRYPOINT [ "./haveno-seednode" ]
 
-CMD ["--baseCurrencyNetwork=XMR_MAINNET", "--useLocalhostForP2P=false", "--useDevPrivilegeKeys=false", "--nodePort=1111", "--appName=aloha-seednode-tony" ]
+CMD ["--baseCurrencyNetwork=XMR_STAGENET", "--useLocalhostForP2P=false", "--useDevPrivilegeKeys=false", "--nodePort=1111", "--appName=seednode1" ]
