@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  monero-node:
+    image: sethsimmons/simple-monerod:latest
+    user: ${FIXUID:-1000}:${FIXGID:-1000}
+    restart: unless-stopped
+    container_name: monerod
+    volumes:
+      - ./bitmonero:/home/monero/.bitmonero
+    ports:
+      - 18080:18080
+      - 18089:18089
+    command:
+      - "--rpc-restricted-bind-ip=0.0.0.0"
+      - "--rpc-restricted-bind-port=18081"
+      - "--public-node"
+      - "--no-igd"
+      - "--enable-dns-blocklist"
+      - "--prune-blockchain"
+
+  haveno-seednode:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.seednode
+    container_name: haveno-seednode
+    ports:
+      - "8008:8008"
+    environment:
+      - MONERO_NODE_URI=http://monero-node:18081
+    depends_on:
+      - monero-node
+    restart: unless-stopped
+
+  haveno-pricenode:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.pricenode
+    container_name: haveno-pricenode
+    ports:
+      - "8081:8081"
+      - "9001:9001"
+    depends_on:
+      - monero-node
+    restart: unless-stopped
+
+  haveno-arbitrator:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.arbitrator
+    container_name: haveno-arbitrator
+    ports:
+      - "8082:8082"
+      - "9002:9002"
+    environment:
+      - MONERO_NODE_URI=http://monero-node:18081
+    depends_on:
+      - monero-node
+    restart: unless-stopped
+
+  envoy:
+    image: envoyproxy/envoy-dev:latest
+    container_name: envoy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8079:8079"
+      - "8080:8080"
+      - "8081:8081"
+      - "8082:8082"
+      - "8083:8083"
+      - "8084:8084"
+      - "8085:8085"
+      - "8086:8086"
+    volumes:
+      - ./../config/envoy.test.yaml:/config/envoy.test.yaml
+    command:
+      - -c
+      - ../config/envoy.test.yaml
+
+  tor:
+    image: goldy/tor-hidden-service:latest
+    container_name: tor
+    restart: unless-stopped
+    links:
+        - monerod
+    environment:
+        MONEROD_TOR_SERVICE_HOSTS: 18089:monerod:18081
+        MONEROD_TOR_SERVICE_VERSION: '3'
+    volumes:
+        - ./hidden_service_keys:/var/lib/tor/hidden_service/
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+        - "/var/run/docker.sock:/var/run/docker.sock"
+
