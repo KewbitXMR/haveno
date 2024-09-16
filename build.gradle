@@ -772,6 +772,8 @@ configure(project(':seednode')) {
 configure(project(':statsnode')) {
     mainClassName = 'haveno.statistics.StatisticsMain'
 
+    apply plugin: 'com.github.johnrengelman.shadow'
+
     dependencies {
         implementation project(':common')
         implementation project(':p2p')
@@ -783,7 +785,15 @@ configure(project(':statsnode')) {
             exclude(module: 'guava')
         }
     }
+
+    shadowJar {
+        archiveBaseName.set('statsnode-all')
+        archiveClassifier.set('')
+        archiveVersion.set('')
+        mergeServiceFiles()
+    }
 }
+
 
 apply plugin: 'com.github.johnrengelman.shadow'
 
